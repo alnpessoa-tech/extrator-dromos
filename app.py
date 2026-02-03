@@ -1,0 +1,57 @@
+import streamlit as st
+import pandas as pd
+import google.generativeai as genai
+from PIL import Image
+import streamlit as st
+import google.generativeai as genai
+
+# Isso lê a chave que você salvou nos Secrets do Streamlit
+api_key = st.secrets["GOOGLE_API_KEY"]
+genai.configure(api_key=api_key)
+
+st.set_page_config(page_title="Extrator Dromos", layout="wide")
+st.title("🏗️ Extrator de Fichas de Apropriação - Dromos")
+
+uploaded_files = st.file_uploader("Upload de PDFs ou Fotos das Fichas", type=['pdf', 'png', 'jpg'], accept_multiple_files=True)
+
+if st.button("Processar Documentos"):
+    if uploaded_files:
+        resultados = []
+        progress_bar = st.progress(0)
+        
+        for i, file in enumerate(uploaded_files):
+            # Converte arquivo para imagem para a IA ler
+            img = Image.open(file)
+            
+            prompt = """
+            Analise esta Ficha de Apropriação de Obra e extraia os dados para um formato JSON.
+            Campos necessários: DATA, FRENTE DE SERVIÇO, SENTIDO, ESTACA, MATERIAL, UNID, QUANT, SERVIÇO, ESTACA INICIAL, ESTACA FINAL, COMP, LARG, ALTURA, OBS.
+            Atenção: Os dados estão manuscritos. Extraia exatamente o que estiver escrito.
+            Retorne APENAS o JSON.
+            """
+            
+            response = model.generate_content([prompt, img])
+            # Aqui adicionamos uma lógica simples de tratamento do texto para o dicionário
+            # (Simplificado para o exemplo)
+            try:
+                dados = eval(response.text.replace("```json", "").replace("```", ""))
+                resultados.append(dados)
+            except:
+                st.error(f"Erro ao ler o arquivo {file.name}")
+            
+            progress_bar.progress((i + 1) / len(uploaded_files))
+
+        df = pd.DataFrame(resultados)
+        st.write("### Dados Extraídos", df)
+        
+        # Gerar Excel
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False)
+        
+        st.download_button(
+            label="📥 Baixar Planilha Excel",
+            data=output.getvalue(),
+            file_name="apropriacao_dromos.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
